@@ -70,8 +70,12 @@ public extension Sensitivity.Preset {
             kind: .secret,
             score: 65,
             reason: "long random-looking token",
-            // Mixed case and digits; plain hex (commit hashes, digests) is not a secret on its own.
+            // Mixed case and digits; plain hex (commit hashes, digests) is not a secret on its own,
+            // nor is a UUID with readable labels, such as a run id `<UUID>-turn-2`.
             assess: { token in
+                if Sensitivity.Preset.isLabelledUUID(token) {
+                    return nil
+                }
                 let upper = token.contains { $0.isUppercase }
                 let lower = token.contains { $0.isLowercase }
                 let digit = token.contains { $0.isNumber }
@@ -230,5 +234,33 @@ extension Sensitivity {
         return parts.count == 4 && parts.allSatisfy { part in
             Int(part).map { (0...255).contains($0) } ?? false
         }
+    }
+}
+
+extension Sensitivity.Preset {
+    /// A UUID (8-4-4-4-12 hex digits) between dash-separated labels of up to
+    /// 16 letters or digits, such as `8F3A…E5F6-turn-2` or `run-8f3a…e5f6`:
+    /// an identifier, however long and mixed its case.
+    static func isLabelledUUID(
+        _ token: String
+    ) -> Bool {
+        let parts = token.split(separator: "-", omittingEmptySubsequences: false)
+        let shape = [8, 4, 4, 4, 12]
+        guard parts.count >= shape.count else {
+            return false
+        }
+        for start in 0...(parts.count - shape.count) {
+            let window = parts[start..<(start + shape.count)]
+            guard zip(window, shape).allSatisfy({ part, length in
+                part.count == length && part.allSatisfy(\.isHexDigit)
+            }) else {
+                continue
+            }
+            let labels = parts[..<start] + parts[(start + shape.count)...]
+            return labels.allSatisfy { label in
+                !label.isEmpty && label.count <= 16 && label.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" }
+            }
+        }
+        return false
     }
 }

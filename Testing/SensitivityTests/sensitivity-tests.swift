@@ -58,6 +58,21 @@ enum SensitivityTests {
         try Expect.false(texts.contains("3f786850e387550fdab836ed7e6dc881de23001b"), "a commit hash is not a secret: \(texts)")
     }
 
+    /// Run ids are UUIDs with labels: identifiers, not secrets (2026-11-19).
+    static func labelledUUIDsAreNotSecrets() throws {
+        let log = """
+            "run": "8F3A91C2-1B2C-4D5E-8F90-A1B2C3D4E5F6-turn-2"
+            "parent": "run-8f3a91c2-1b2c-4d5e-8f90-a1b2c3d4e5f6-turn-12"
+            "session": "8F3A91C2-1B2C-4D5E-8F90-A1B2C3D4E5F6"
+            """
+        try Expect.isEmpty(Sensitivity.scan(log, presets: [.secrets]), "run, parent and session ids stay")
+
+        let leaked = "export TOKEN_X Zq8Lr2Wm9Tx4Kp7Nv3Bc6Hd1Fg5Js0QaYe8Ui2Ow4Pk7Mn"
+        try Expect.equal(Sensitivity.scan(leaked, presets: [.secrets]).map(\.detector), ["secrets.long-token"], "a long random token is still found")
+        let disguised = "8F3A91C2-1B2C-4D5E-8F90-A1B2C3D4E5F6-Zq8Lr2Wm9Tx4Kp7Nv3Bc6Hd1Fg5"
+        try Expect.equal(Sensitivity.scan(disguised, presets: [.secrets]).count, 1, "a UUID does not excuse a long random label")
+    }
+
     static func networkAndLinks() throws {
         let log = """
             from 10.20.30.40 and 192.168.1.15 via aa:bb:cc:dd:ee:ff; public 8.8.8.8

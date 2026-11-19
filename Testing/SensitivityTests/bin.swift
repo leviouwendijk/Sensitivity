@@ -40,6 +40,9 @@ enum SensitivityTestSuite {
         Test("secrets-value-only-and-hashes-ignored", tags: ["detect", "secrets"]) {
             try SensitivityTests.secretsValueOnlyAndHashesIgnored()
         }
+        Test("labelled-uuids-are-not-secrets", tags: ["secrets"]) {
+            try SensitivityTests.labelledUUIDsAreNotSecrets()
+        }
 
         Test("network-and-links", tags: ["detect", "network", "links"]) {
             try SensitivityTests.networkAndLinks()
