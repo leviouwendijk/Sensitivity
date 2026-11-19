@@ -70,7 +70,8 @@ public extension Sensitivity {
 
     /// Why a handle could not be given to a tool.
     enum ShieldFailure: Error, Sendable, Hashable, CustomStringConvertible {
-        /// Not in the vault, or expired: fetch the value from its source again.
+        /// Stale or untraceable: not in the vault (expired, released, or from
+        /// another machine). Fetch the value from its source again.
         case unknown(Handle)
         /// The tool may not use it without the owner's grant.
         case notPermitted(Handle, tool: String)
@@ -78,7 +79,7 @@ public extension Sensitivity {
         public var description: String {
             switch self {
             case .unknown(let handle):
-                return "\(handle.token) is unknown or expired; read it again from its source."
+                return "\(handle.token) is stale or untraceable: the vault no longer holds its value (expired, released, or recorded on another machine). Read the value again from its source."
             case .notPermitted(let handle, let tool):
                 return "\(tool) may not use \(handle.token); ask the owner to grant it (privacy_grant) or use a tool of the domain it came from."
             }
