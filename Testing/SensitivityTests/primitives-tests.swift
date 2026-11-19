@@ -58,10 +58,10 @@ extension SensitivityTests {
         try Expect.equal(findings.map(\.text), ["Noor de Vries", "noor"], "the longest known value wins")
         try Expect.equal(findings.map(\.reason), ["client, full name", "client"], "the first declaration of a value wins")
 
-        let mail = "to first.last+tag@sub.example.co.uk, x@example.nl. Not a@b, @example.nl, user@localhost or ä@é.nl; then sam@example.nl"
+        let mail = "to first.last+tag@sub.mail.example.com, x@example.com. Not a@b, @example.com, user@localhost or ä@é.nl; then sam@example.com"
         try Expect.equal(
             Sensitivity.scan(mail, presets: [.contacts]).map(\.text),
-            ["first.last+tag@sub.example.co.uk", "x@example.nl", "sam@example.nl"],
+            ["first.last+tag@sub.mail.example.com", "x@example.com", "sam@example.com"],
             "addresses need a local part and a dotted domain ending in letters; a trailing dot is left out"
         )
         let tokens = "short Ab1 \(String(repeating: "aB3", count: 14)) \(String(repeating: "ab3", count: 14))"
@@ -123,7 +123,7 @@ extension SensitivityTests {
         try Expect.isNil(Sensitivity.SafeToken.or("allow return"), "no spaces in a token")
 
         let screened = Sensitivity.TextPolicy(maximumLength: 80, allowsSpace: true, punctuation: ["@", "."], screenedBy: ["contacts"])
-        try Expect.notNil(screened.violation("mail sam@example.nl"), "screened by the contacts preset")
+        try Expect.notNil(screened.violation("mail sam@example.com"), "screened by the contacts preset")
         try Expect.isNil(screened.violation("version 1.2"), "clean text passes")
         try Expect.true(Sensitivity.isClean("Main LAN"), "nothing found")
     }

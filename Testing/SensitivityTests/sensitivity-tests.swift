@@ -5,15 +5,15 @@ import Testing
 /// the IBAN standard's documentation example.
 enum SensitivityTests {
     static let note = """
-        Intake for Noor de Vries (noor.devries@example.nl, 06 12 34 56 78) and Pip.
+        Intake for Noor de Vries (noor.devries@example.com, 06 00 00 00 00) and Pip.
         Invoice to NL91 ABNA 0417 1643 00, Teststraat 1, 1234 AB Testdorp.
         """
 
     static func contactsFoundWithOffsets() throws {
         let findings = Sensitivity.scan(note, presets: [.contacts])
         let texts = findings.map(\.text)
-        try Expect.contains(texts, "noor.devries@example.nl", "the mail address: \(texts)")
-        try Expect.contains(texts, "06 12 34 56 78", "the mobile number with its spaces: \(texts)")
+        try Expect.contains(texts, "noor.devries@example.com", "the mail address: \(texts)")
+        try Expect.contains(texts, "06 00 00 00 00", "the mobile number with its spaces: \(texts)")
         try Expect.contains(texts, "1234 AB", "the postcode: \(texts)")
 
         let mail = try Expect.notNil(findings.first { $0.detector == "contacts.email" }, "a mail finding")
@@ -61,14 +61,14 @@ enum SensitivityTests {
     static func networkAndLinks() throws {
         let log = """
             from 10.20.30.40 and 192.168.1.15 via aa:bb:cc:dd:ee:ff; public 8.8.8.8
-            open https://example.nl/accept?id=7&token=Zx81Qp
+            open https://example.com/accept?id=7&token=Zx81Qp
             """
         let texts = Sensitivity.scan(log, presets: [.network, .links]).map(\.text)
         try Expect.contains(texts, "10.20.30.40", "a 10/8 address: \(texts)")
         try Expect.contains(texts, "192.168.1.15", "a 192.168/16 address: \(texts)")
         try Expect.contains(texts, "aa:bb:cc:dd:ee:ff", "a MAC address: \(texts)")
         try Expect.false(texts.contains("8.8.8.8"), "a public address is not private: \(texts)")
-        try Expect.contains(texts, "https://example.nl/accept?id=7&token=Zx81Qp", "a URL with a token: \(texts)")
+        try Expect.contains(texts, "https://example.com/accept?id=7&token=Zx81Qp", "a URL with a token: \(texts)")
     }
 
     static func knownValuesWholeWords() throws {
@@ -85,17 +85,17 @@ enum SensitivityTests {
     }
 
     static func overlapsKeepTheStronger() throws {
-        let findings = Sensitivity.scan("Bel +31 6 12345678 vandaag.", presets: [.contacts])
+        let findings = Sensitivity.scan("Bel +31 6 00000000 vandaag.", presets: [.contacts])
         try Expect.equal(findings.count, 1, "one number, found by two detectors: \(findings.map(\.detector))")
         try Expect.equal(findings.first?.detector, "contacts.phone-nl-mobile", "the higher-scoring detector wins")
     }
 
     static func replacementMethods() throws {
-        let text = "Mail noor@example.nl or call 06 12 34 56 78."
+        let text = "Mail noor@example.com or call 06 00 00 00 00."
         let findings = Sensitivity.scan(text, presets: [.contacts])
 
         var preserve = Sensitivity.Redactor(method: .preserve)
-        try Expect.equal(preserve.apply(findings, to: text).text, "Mail aaaa@aaaaaaa.aa or call 00 00 00 00 00.", "shape kept")
+        try Expect.equal(preserve.apply(findings, to: text).text, "Mail aaaa@aaaaaaa.aaa or call 00 00 00 00 00.", "shape kept")
 
         var verbose = Sensitivity.Redactor(method: .verbose)
         try Expect.equal(verbose.apply(findings, to: text).text, "Mail [CONTACT] or call [CONTACT].", "kind named")
@@ -103,14 +103,14 @@ enum SensitivityTests {
         var redact = Sensitivity.Redactor(method: .redact)
         let redacted = redact.apply(findings, to: text)
         try Expect.equal(redacted.text, "Mail [REDACTED] or call [REDACTED].", "plainly redacted")
-        try Expect.equal(redacted.replacements.map(\.original), ["noor@example.nl", "06 12 34 56 78"], "the mapping keeps the originals, in order")
+        try Expect.equal(redacted.replacements.map(\.original), ["noor@example.com", "06 00 00 00 00"], "the mapping keeps the originals, in order")
     }
 
     static func pseudonymsConsistentAcrossTexts() throws {
         let known = [Sensitivity.Known("Noor", reason: "client"), Sensitivity.Known("Sam", reason: "client")]
         var redactor = Sensitivity.Redactor(method: .pseudonym)
 
-        let first = "Noor asked about Sam; noor@example.nl."
+        let first = "Noor asked about Sam; noor@example.com."
         let second = "Sam replied to Noor."
         let a = redactor.apply(Sensitivity.scan(first, presets: [.contacts], known: known), to: first)
         let b = redactor.apply(Sensitivity.scan(second, presets: [.contacts], known: known), to: second)

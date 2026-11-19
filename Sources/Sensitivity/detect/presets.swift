@@ -38,7 +38,7 @@ public extension Sensitivity.Preset {
             "secrets.assignment",
             kind: .secret,
             // Any name containing a credential word, as in api_key=, "access_token": or
-            // MAIL_PASSWORD_LEVI_HM=; the value only, so the name stays readable. Anchored
+            // MAIL_PASSWORD_X_HM=; the value only, so the name stays readable. Anchored
             // on the word: what precedes it in the name does not change the value.
             pattern: "(?:api[_-]?key|apikey|secret|token|password|passwd|credential|private[_-]?key|auth[_-]?key)[A-Za-z0-9_.-]*[\"']?\\s{0,3}[:=]\\s{0,3}[\"']?(?<value>[^\\s\"',;]{6,})",
             score: 92,

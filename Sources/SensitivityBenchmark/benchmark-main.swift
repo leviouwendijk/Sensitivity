@@ -10,7 +10,7 @@ struct SensitivityBenchmark {
     static let paragraph = """
         The intake went well and the next session is planned for the weekend.
         let result = try parser.parse(input, configuration: .defaults) // 42 items
-        Mail noor.devries@example.nl or call 06 12 34 56 78 about Pip.
+        Mail noor.devries@example.com or call 06 00 00 00 00 about Pip.
         Commit 3f786850e387550fdab836ed7e6dc881de23001b fixed the build on 10.0.0.7.
         Invoice to NL91 ABNA 0417 1643 00; api_key = "sk_test_Abc123Def456Ghi789".
         Nothing sensitive in this line, just words about training and behaviour.
