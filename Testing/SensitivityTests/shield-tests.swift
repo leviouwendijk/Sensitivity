@@ -147,6 +147,9 @@ extension SensitivityTests {
         try Expect.equal(await elsewhere.value(of: pinned), "sam@example.com", "the same handle resolves there")
         try Expect.equal(await elsewhere.insert(sealed), 0, "importing twice adds nothing")
 
+        try Expect.equal(await elsewhere.forget([pinned.id]), 1, "a deliberate scrub forgets it, pinned or not")
+        try Expect.isNil(await elsewhere.value(of: pinned), "its handle is stale there now")
+
         await vault.pin(only: [])
         await vault.expire(now: Date().addingTimeInterval(3600))
         try Expect.isNil(await vault.value(of: pinned), "once unpinned, it expires like any other")

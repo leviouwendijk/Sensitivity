@@ -233,6 +233,21 @@ public extension Sensitivity {
             return added
         }
 
+        /// Forgets the values behind `ids`, pinned or not: for a deliberate
+        /// scrub such as a deletion request. Their handles become stale.
+        @discardableResult
+        public func forget(_ ids: Set<String>) -> Int {
+            let before = entries.count
+            entries = entries.filter { !ids.contains($0.key) }
+            byValue = byValue.filter { entries[$0.value] != nil }
+            let forgotten = before - entries.count
+            if forgotten > 0 {
+                known = nil
+                persist()
+            }
+            return forgotten
+        }
+
         /// Forgets every entry and clears the store; for a closed session.
         public func clear() {
             entries = [:]
