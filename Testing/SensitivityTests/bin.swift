@@ -112,6 +112,10 @@ enum SensitivityTestSuite {
             try await SensitivityTests.unreferencedAndReleased()
         }
 
+        Test("pinned-entries-stay", tags: ["vault", "pin"]) {
+            try await SensitivityTests.pinnedEntriesStay()
+        }
+
         Test("preview-shows-masked-values", tags: ["preview"]) {
             try await SensitivityTests.previewShowsMaskedValues()
         }

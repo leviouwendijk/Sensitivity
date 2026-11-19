@@ -128,6 +128,30 @@ extension SensitivityTests {
         try Expect.equal(store.count, 0, "an empty vault leaves nothing in its store")
     }
 
+    static func pinnedEntriesStay() async throws {
+        let vault = Sensitivity.Vault(lifetime: .seconds(60))
+        let pinned = await vault.handle(for: "sam@example.com", kind: .contact, tier: .handle, detector: "t", reason: "t", score: 90, source: "a", session: "s1")
+        let loose = await vault.handle(for: "alex@example.com", kind: .contact, tier: .handle, detector: "t", reason: "t", score: 90, source: "a", session: "s1")
+        await vault.pin(only: [pinned.id])
+
+        await vault.release(session: "s1")
+        await vault.expire(now: Date().addingTimeInterval(3600))
+        await vault.retain(referenced: [], now: Date().addingTimeInterval(7200))
+        try Expect.notNil(await vault.value(of: pinned), "no release, expiry or sweep drops a pinned value")
+        try Expect.isNil(await vault.value(of: loose), "the unpinned one went")
+
+        let sealed = await vault.export([pinned.id])
+        try Expect.equal(sealed.map(\.value.raw), ["sam@example.com"], "exported with its value, for a sealed copy")
+        let elsewhere = Sensitivity.Vault()
+        try Expect.equal(await elsewhere.insert(sealed), 1, "imported on another machine")
+        try Expect.equal(await elsewhere.value(of: pinned), "sam@example.com", "the same handle resolves there")
+        try Expect.equal(await elsewhere.insert(sealed), 0, "importing twice adds nothing")
+
+        await vault.pin(only: [])
+        await vault.expire(now: Date().addingTimeInterval(3600))
+        try Expect.isNil(await vault.value(of: pinned), "once unpinned, it expires like any other")
+    }
+
     static func previewShowsMaskedValues() async throws {
         let shield = Sensitivity.Shield(vault: Sensitivity.Vault())
         let (protected, protection) = await shield.protect("pay NL91ABNA0417164300 from 1234 AB", source: "bunq_payments")

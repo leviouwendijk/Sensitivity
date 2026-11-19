@@ -37,6 +37,9 @@ public extension Sensitivity {
             public var grants: Set<String>
             /// Sessions that saw the value; empty for values seen outside one.
             public var sessions: Set<String>
+            /// Referenced by a pinned session: no expiry, release or sweep
+            /// drops it while the pin stands.
+            public var pinned: Bool
             public let created: Date
             public var expires: Date?
 
@@ -50,6 +53,7 @@ public extension Sensitivity {
                 sources: [String],
                 grants: Set<String>,
                 sessions: Set<String> = [],
+                pinned: Bool = false,
                 created: Date,
                 expires: Date?
             ) {
@@ -62,6 +66,7 @@ public extension Sensitivity {
                 self.sources = sources
                 self.grants = grants
                 self.sessions = sessions
+                self.pinned = pinned
                 self.created = created
                 self.expires = expires
             }
@@ -192,6 +197,42 @@ public extension Sensitivity {
             return detector
         }
 
+        /// Marks exactly the entries in `ids` as pinned and unpins the rest:
+        /// the handles pinned sessions reference.
+        public func pin(only ids: Set<String>) {
+            var changed = false
+            for (id, var entry) in entries where entry.pinned != ids.contains(id) {
+                entry.pinned = ids.contains(id)
+                entries[id] = entry
+                changed = true
+            }
+            if changed { persist() }
+        }
+
+        /// The entries for `ids`, values included: what a sealed copy of a
+        /// session carries.
+        public func export(_ ids: Set<String>) -> [Entry] {
+            ids.compactMap { entries[$0] }.sorted { $0.created < $1.created }
+        }
+
+        /// Adds `imported` entries (from a sealed copy) that are not here
+        /// yet; a value already held keeps its own handle. Returns how many
+        /// were added.
+        @discardableResult
+        public func insert(_ imported: [Entry]) -> Int {
+            var added = 0
+            for entry in imported where entries[entry.handle.id] == nil && byValue[Self.key(entry.handle.kind, entry.value.raw)] == nil {
+                entries[entry.handle.id] = entry
+                byValue[Self.key(entry.handle.kind, entry.value.raw)] = entry.handle.id
+                added += 1
+            }
+            if added > 0 {
+                known = nil
+                persist()
+            }
+            return added
+        }
+
         /// Forgets every entry and clears the store; for a closed session.
         public func clear() {
             entries = [:]
@@ -225,7 +266,7 @@ public extension Sensitivity {
 
         private func drop(where condition: (Entry) -> Bool) -> Int {
             let before = entries.count
-            entries = entries.filter { !condition($0.value) }
+            entries = entries.filter { $0.value.pinned || !condition($0.value) }
             byValue = byValue.filter { entries[$0.value] != nil }
             let dropped = before - entries.count
             if dropped > 0 {
@@ -238,7 +279,7 @@ public extension Sensitivity {
         /// Drops expired entries.
         public func expire(now: Date = Date()) {
             let before = entries.count
-            entries = entries.filter { ($0.value.expires ?? .distantFuture) > now }
+            entries = entries.filter { $0.value.pinned || ($0.value.expires ?? .distantFuture) > now }
             byValue = byValue.filter { entries[$0.value] != nil }
             if entries.count != before {
                 known = nil
@@ -249,7 +290,7 @@ public extension Sensitivity {
         private func live(_ handle: Handle) -> Entry? {
             guard let entry = entries[handle.id],
                   entry.handle.kind == handle.kind,
-                  (entry.expires ?? .distantFuture) > Date()
+                  entry.pinned || (entry.expires ?? .distantFuture) > Date()
             else {
                 return nil
             }
@@ -274,7 +315,7 @@ public extension Sensitivity {
 
 extension Sensitivity.Vault.Entry {
     private enum CodingKeys: String, CodingKey {
-        case handle, value, tier, detector, reason, score, sources, grants, sessions, created, expires
+        case handle, value, tier, detector, reason, score, sources, grants, sessions, pinned, created, expires
     }
 
     /// Entries stored before sessions were recorded decode with none.
@@ -290,6 +331,7 @@ extension Sensitivity.Vault.Entry {
             sources: try container.decode([String].self, forKey: .sources),
             grants: try container.decode(Set<String>.self, forKey: .grants),
             sessions: try container.decodeIfPresent(Set<String>.self, forKey: .sessions) ?? [],
+            pinned: try container.decodeIfPresent(Bool.self, forKey: .pinned) ?? false,
             created: try container.decode(Date.self, forKey: .created),
             expires: try container.decodeIfPresent(Date.self, forKey: .expires)
         )
