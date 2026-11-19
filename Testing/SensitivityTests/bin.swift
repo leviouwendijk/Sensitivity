@@ -73,6 +73,10 @@ enum SensitivityTestSuite {
             try SensitivityTests.networkRangesWhole()
         }
 
+        Test("scan-shortcuts-and-precision", tags: ["detect", "performance"]) {
+            try SensitivityTests.scanShortcutsAndPrecision()
+        }
+
         Test("masking", tags: ["replace"]) {
             try SensitivityTests.masking()
         }

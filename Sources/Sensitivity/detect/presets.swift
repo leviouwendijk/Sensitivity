@@ -31,17 +31,20 @@ public extension Sensitivity.Preset {
             kind: .secret,
             pattern: "-----BEGIN [A-Z ]*(?:PRIVATE KEY|CERTIFICATE)-----",
             score: 98,
-            reason: "PEM key or certificate block"
+            reason: "PEM key or certificate block",
+            requires: [.dash]
         ),
         Sensitivity.Pattern(
             "secrets.assignment",
             kind: .secret,
             // Any name containing a credential word, as in api_key=, "access_token": or
-            // MAIL_PASSWORD_LEVI_HM=; the value only, so the name stays readable.
-            pattern: "(?<![A-Za-z0-9])[A-Za-z0-9_.-]*(?:api[_-]?key|apikey|secret|token|password|passwd|credential|private[_-]?key|auth[_-]?key)[A-Za-z0-9_.-]*[\"']?\\s{0,3}[:=]\\s{0,3}[\"']?(?<value>[^\\s\"',;]{6,})",
+            // MAIL_PASSWORD_LEVI_HM=; the value only, so the name stays readable. Anchored
+            // on the word: what precedes it in the name does not change the value.
+            pattern: "(?:api[_-]?key|apikey|secret|token|password|passwd|credential|private[_-]?key|auth[_-]?key)[A-Za-z0-9_.-]*[\"']?\\s{0,3}[:=]\\s{0,3}[\"']?(?<value>[^\\s\"',;]{6,})",
             score: 92,
             reason: "value assigned to a key, token or password",
-            group: .named("value")
+            group: .named("value"),
+            requires: [.assignment]
         ),
         Sensitivity.Pattern(
             "secrets.header",
@@ -50,7 +53,8 @@ public extension Sensitivity.Preset {
             pattern: "(?:authorization:\\s*(?:bearer|basic|token|digest)\\s+|\\bx-[a-z0-9-]*(?:auth|authentication|token|key|signature|secret)[a-z0-9-]*:\\s*)(?<value>[^\\s\"']{8,})",
             score: 94,
             reason: "credential in an HTTP header",
-            group: .named("value")
+            group: .named("value"),
+            requires: [.colon]
         ),
         Sensitivity.Pattern(
             "secrets.aws-access-key",
@@ -58,47 +62,50 @@ public extension Sensitivity.Preset {
             pattern: "\\bAKIA[0-9A-Z]{16}\\b",
             score: 95,
             reason: "AWS access key id",
-            caseSensitive: true
+            caseSensitive: true,
+            requires: [.digit]
         ),
-        Sensitivity.Pattern(
+        Sensitivity.Scanner(
             "secrets.long-token",
             kind: .secret,
-            pattern: "(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{40,}(?![A-Za-z0-9_-])",
             score: 65,
             reason: "long random-looking token",
-            caseSensitive: true,
             // Mixed case and digits; plain hex (commit hashes, digests) is not a secret on its own.
             assess: { token in
                 let upper = token.contains { $0.isUppercase }
                 let lower = token.contains { $0.isLowercase }
                 let digit = token.contains { $0.isNumber }
                 return upper && lower && digit ? Sensitivity.Score(clamping: 65) : nil
-            }
+            },
+            scan: ByteScan.tokenRuns(minimum: 40)
         ),
     ])
 
     /// Mail addresses, phone numbers and Dutch postcodes.
     static let contacts = Self("contacts", detectors: [
-        Sensitivity.Pattern(
+        Sensitivity.Scanner(
             "contacts.email",
             kind: .contact,
-            pattern: "(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}",
             score: 90,
-            reason: "mail address"
+            reason: "mail address",
+            requires: [.at, .dot],
+            scan: ByteScan.mailAddresses
         ),
         Sensitivity.Pattern(
             "contacts.phone-nl-mobile",
             kind: .contact,
             pattern: "(?<![\\d+])(?:\\+31[\\s-]?6|0031[\\s-]?6|06)[\\s-]?\\d(?:[\\s-]?\\d){7}(?!\\d)",
             score: 88,
-            reason: "Dutch mobile number"
+            reason: "Dutch mobile number",
+            requires: [.digit]
         ),
         Sensitivity.Pattern(
             "contacts.phone-international",
             kind: .contact,
             pattern: "(?<![\\d+])\\+\\d{1,3}[\\s-]?\\d(?:[\\s-]?\\d){6,12}(?!\\d)",
             score: 75,
-            reason: "international phone number"
+            reason: "international phone number",
+            requires: [.digit]
         ),
         Sensitivity.Pattern(
             "contacts.postcode-nl",
@@ -106,7 +113,8 @@ public extension Sensitivity.Preset {
             pattern: "\\b[1-9]\\d{3}\\s?[A-Z]{2}\\b",
             score: 50,
             reason: "Dutch postcode",
-            caseSensitive: true
+            caseSensitive: true,
+            requires: [.digit]
         ),
     ])
 
@@ -119,6 +127,7 @@ public extension Sensitivity.Preset {
             score: 45,
             reason: "IBAN",
             caseSensitive: true,
+            requires: [.digit],
             assess: { candidate in
                 (try? Sensitivity.IBAN(candidate)) != nil ? Sensitivity.Score(clamping: 97) : Sensitivity.Score(clamping: 45)
             }
@@ -145,7 +154,8 @@ public extension Sensitivity.Preset {
             pattern: "\\bAT-\\d{4}-\\d{4}\\b",
             score: 88,
             reason: "PAY. AT code (half of an API credential)",
-            caseSensitive: true
+            caseSensitive: true,
+            requires: [.digit, .dash]
         ),
         Sensitivity.Pattern(
             "payments.paynl-service-id",
@@ -153,7 +163,8 @@ public extension Sensitivity.Preset {
             pattern: "\\bSL-\\d{4}-\\d{4}\\b",
             score: 40,
             reason: "PAY. service id",
-            caseSensitive: true
+            caseSensitive: true,
+            requires: [.digit, .dash]
         ),
     ])
 
@@ -164,28 +175,38 @@ public extension Sensitivity.Preset {
             kind: .network,
             pattern: "\\b(?:\\d{1,3}\\.){3}\\d{1,3}/(?:3[0-2]|[12]?\\d)\\b",
             score: 82,
-            reason: "IPv4 range"
+            reason: "IPv4 range",
+            requires: [.digit, .dot, .slash],
+            assess: { range in
+                Sensitivity.octetsInRange(String(range.prefix { $0 != "/" })) ? Sensitivity.Score(clamping: 82) : nil
+            }
         ),
         Sensitivity.Pattern(
             "network.private-ipv4",
             kind: .network,
             pattern: "\\b(?:10\\.\\d{1,3}|192\\.168|172\\.(?:1[6-9]|2\\d|3[01]))\\.\\d{1,3}\\.\\d{1,3}\\b",
             score: 80,
-            reason: "private IPv4 address"
+            reason: "private IPv4 address",
+            requires: [.digit, .dot],
+            assess: { address in
+                Sensitivity.octetsInRange(address) ? Sensitivity.Score(clamping: 80) : nil
+            }
         ),
         Sensitivity.Pattern(
             "network.private-ipv6",
             kind: .network,
             pattern: "\\b(?:fd[0-9a-f]{2}|fe80):[0-9a-f:]*[0-9a-f](?:/\\d{1,3})?",
             score: 75,
-            reason: "unique-local or link-local IPv6 address"
+            reason: "unique-local or link-local IPv6 address",
+            requires: [.colon]
         ),
         Sensitivity.Pattern(
             "network.mac",
             kind: .network,
             pattern: "\\b[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5}\\b",
             score: 70,
-            reason: "MAC address"
+            reason: "MAC address",
+            requires: [.colon]
         ),
     ])
 
@@ -196,7 +217,18 @@ public extension Sensitivity.Preset {
             kind: .link,
             pattern: "https?://[^\\s\"'<>]*[?&](?:token|key|sig|signature|code|auth|access_token)=[^\\s\"'<>&]+[^\\s\"'<>]*",
             score: 85,
-            reason: "URL carrying a token or signature"
+            reason: "URL carrying a token or signature",
+            requires: [.colon, .slash, .assignment]
         ),
     ])
+}
+
+extension Sensitivity {
+    /// Whether every dotted part of an IPv4 address is 0...255.
+    static func octetsInRange(_ address: String) -> Bool {
+        let parts = address.split(separator: ".")
+        return parts.count == 4 && parts.allSatisfy { part in
+            Int(part).map { (0...255).contains($0) } ?? false
+        }
+    }
 }

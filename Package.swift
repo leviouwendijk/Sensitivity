@@ -18,6 +18,10 @@ let package = Package(
             name: "t_sensitivity",
             targets: ["SensitivityTests"]
         ),
+        .executable(
+            name: "b_sensitivity",
+            targets: ["SensitivityBenchmark"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/leviouwendijk/Primitives.git", branch: "master"),
@@ -32,6 +36,13 @@ let package = Package(
                 .product(name: "Primitives", package: "Primitives"),
                 .product(name: "Matching", package: "Matching"),
                 .product(name: "Tokens", package: "Tokens"),
+            ]
+        ),
+        .executableTarget(
+            name: "SensitivityBenchmark",
+            dependencies: [
+                "Sensitivity",
+                .product(name: "Matching", package: "Matching"),
             ]
         ),
         .executableTarget(

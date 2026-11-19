@@ -15,7 +15,8 @@ public enum Sensitivity {}
 public extension Sensitivity {
     /// Every finding of the presets' detectors and the known values in
     /// `text`, without overlaps (the higher score wins, then the longer
-    /// finding), in text order.
+    /// finding), in text order. Detectors whose trigger characters the text
+    /// lacks are skipped.
     static func scan(
         _ text: String,
         presets: [Preset] = Preset.all,
@@ -25,13 +26,48 @@ public extension Sensitivity {
         if !known.isEmpty {
             detectors.append(KnownValues(known))
         }
-        return resolvingOverlaps(detectors.flatMap { $0.findings(in: text) })
+        return scan(text, detectors: detectors)
+    }
+
+    /// `scan` with prepared detectors; keep a `KnownValues` and reuse it
+    /// for many texts rather than rebuilding it per text.
+    static func scan(_ text: String, detectors: [any Detector]) -> [Finding] {
+        let features = Features(of: text)
+        let applicable = detectors.filter { features.isSuperset(of: $0.requires) }
+        guard !applicable.isEmpty else { return [] }
+        // Prepared once for every detector.
+        let subject = RegexSubject(text)
+        let found = applicable.flatMap { $0.findings(in: subject) }
+        return resolvingOverlaps(found)
     }
 
     /// Keeps, of findings that overlap, the one with the highest score (then
-    /// the longest, then the earliest).
+    /// the longest, then the earliest). Findings are swept in text order;
+    /// only each run of overlapping findings is ranked.
     static func resolvingOverlaps(_ findings: [Finding]) -> [Finding] {
-        let ranked = findings.sorted { a, b in
+        let ordered = findings.sorted {
+            $0.range.startOffset != $1.range.startOffset
+                ? $0.range.startOffset < $1.range.startOffset
+                : $0.range.endOffset > $1.range.endOffset
+        }
+        var kept: [Finding] = []
+        var cluster: [Finding] = []
+        var clusterEnd = 0
+        for finding in ordered {
+            if !cluster.isEmpty, finding.range.startOffset >= clusterEnd {
+                kept += rankedWithoutOverlap(cluster)
+                cluster = []
+            }
+            cluster.append(finding)
+            clusterEnd = cluster.count == 1 ? finding.range.endOffset : max(clusterEnd, finding.range.endOffset)
+        }
+        kept += rankedWithoutOverlap(cluster)
+        return kept
+    }
+
+    private static func rankedWithoutOverlap(_ cluster: [Finding]) -> [Finding] {
+        guard cluster.count > 1 else { return cluster }
+        let ranked = cluster.sorted { a, b in
             if a.score != b.score { return a.score > b.score }
             if a.range.offsetRange.count != b.range.offsetRange.count {
                 return a.range.offsetRange.count > b.range.offsetRange.count
@@ -43,14 +79,5 @@ public extension Sensitivity {
             kept.append(finding)
         }
         return kept.sorted { $0.range.startOffset < $1.range.startOffset }
-    }
-}
-
-extension String {
-    /// The text at character offsets `range`.
-    func text(at range: MatchRange) -> String {
-        let start = index(startIndex, offsetBy: range.startOffset)
-        let end = index(start, offsetBy: range.offsetRange.count)
-        return String(self[start..<end])
     }
 }

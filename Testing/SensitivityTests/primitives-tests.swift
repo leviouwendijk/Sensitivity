@@ -38,6 +38,44 @@ extension SensitivityTests {
         try Expect.equal(texts, ["10.0.0.0/24", "10.0.0.7", "fd12:3456:789a::1", "fe80::1/64"], "a CIDR is one finding")
     }
 
+    static func scanShortcutsAndPrecision() throws {
+        try Expect.equal(Sensitivity.Features(of: "plain words only"), [], "no trigger characters")
+        try Expect.true(Sensitivity.Features(of: "a@b.c 1").isSuperset(of: [.at, .dot, .digit]), "triggers found")
+
+        let addresses = Sensitivity.scan("10.0.0.300 and 10.0.0.30 and 10.0.0.0/33 and 192.168.0.0/16", presets: [.network]).map(\.text)
+        try Expect.equal(
+            addresses,
+            ["10.0.0.30", "10.0.0.0", "192.168.0.0/16"],
+            "an octet above 255 is no address; a prefix above 32 is no range, though its address still counts"
+        )
+
+        let known = [
+            Sensitivity.Known("Noor", reason: "client"),
+            Sensitivity.Known("Noor de Vries", reason: "client, full name"),
+            Sensitivity.Known("noor", reason: "duplicate"),
+        ]
+        let findings = Sensitivity.scan("Noor de Vries and noor.", presets: [], known: known)
+        try Expect.equal(findings.map(\.text), ["Noor de Vries", "noor"], "the longest known value wins")
+        try Expect.equal(findings.map(\.reason), ["client, full name", "client"], "the first declaration of a value wins")
+
+        let mail = "to first.last+tag@sub.example.co.uk, x@example.nl. Not a@b, @example.nl, user@localhost or ä@é.nl; then sam@example.nl"
+        try Expect.equal(
+            Sensitivity.scan(mail, presets: [.contacts]).map(\.text),
+            ["first.last+tag@sub.example.co.uk", "x@example.nl", "sam@example.nl"],
+            "addresses need a local part and a dotted domain ending in letters; a trailing dot is left out"
+        )
+        let tokens = "short Ab1 \(String(repeating: "aB3", count: 14)) \(String(repeating: "ab3", count: 14))"
+        try Expect.equal(
+            Sensitivity.scan(tokens, presets: [.secrets]).map(\.text),
+            [String(repeating: "aB3", count: 14)],
+            "a long run with mixed case and digits; lowercase hex-like runs are left"
+        )
+
+        for pattern in Sensitivity.Preset.all.flatMap(\.detectors).compactMap({ $0 as? Sensitivity.Pattern }) {
+            try Expect.true(pattern.isValid, "\(pattern.name) compiles")
+        }
+    }
+
     static func masking() throws {
         try Expect.equal(Sensitivity.mask("NL91 ABNA 0417 1643 00"), "**** **** **** **43 00", "last four kept, separators kept")
         try Expect.equal(Sensitivity.mask("abc"), "***", "short values fully masked")
