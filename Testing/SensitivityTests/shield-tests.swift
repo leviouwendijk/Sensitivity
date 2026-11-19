@@ -86,6 +86,17 @@ extension SensitivityTests {
         try Expect.equal(unknown, .unknown(.init(kind: .contact, id: "00000000")), "an unknown handle throws")
     }
 
+    static func displayEntries() async throws {
+        let vault = Sensitivity.Vault(lifetime: .seconds(60))
+        let sam = await vault.handle(for: "sam@example.com", kind: .contact, tier: .handle, detector: "email", reason: "address", score: 90, source: "mail_read")
+        let entries = await vault.displayEntries()
+        try Expect.equal(entries.map(\.description.handle), [sam], "live entries")
+        try Expect.equal(entries.first?.value, "sam@example.com", "with the value, for the owner")
+        try Expect.equal(entries.first?.description.sources, ["mail_read"], "and where it was seen")
+        await vault.expire(now: Date().addingTimeInterval(120))
+        try Expect.true(await vault.displayEntries().isEmpty, "expired entries are not shown")
+    }
+
     static func vaultLifetimeAndStore() async throws {
         let store = MemoryStore()
         let vault = Sensitivity.Vault(lifetime: .seconds(60), store: store)

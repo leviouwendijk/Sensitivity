@@ -1,3 +1,4 @@
+import Foundation
 import Matching
 
 public extension Sensitivity {
@@ -39,6 +40,19 @@ public extension Sensitivity {
                 }
                 return (Handle(kind: kind, id: String(inner[inner.index(after: colon)...])), match.range)
             }
+        }
+    }
+
+    /// A handle as the owner may see it: what is known about it and its value.
+    struct DisplayEntry: Sendable, Hashable {
+        public let description: HandleDescription
+        public let value: String
+        public let expires: Date?
+
+        public init(description: HandleDescription, value: String, expires: Date?) {
+            self.description = description
+            self.value = value
+            self.expires = expires
         }
     }
 

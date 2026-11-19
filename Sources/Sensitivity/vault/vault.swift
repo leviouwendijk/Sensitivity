@@ -176,6 +176,15 @@ public extension Sensitivity {
                 .map(\.description)
         }
 
+        /// Every live entry's description with its value, for showing the
+        /// owner what handles stand for. Never for a model or a record.
+        public func displayEntries() -> [DisplayEntry] {
+            entries.values
+                .filter { $0.pinned || ($0.expires ?? .distantFuture) > Date() }
+                .sorted { $0.created < $1.created }
+                .map { DisplayEntry(description: $0.description, value: $0.value.raw, expires: $0.expires) }
+        }
+
         /// Lets `tool` use `handle` from now on.
         @discardableResult
         public func grant(_ handle: Handle, to tool: String) -> Bool {

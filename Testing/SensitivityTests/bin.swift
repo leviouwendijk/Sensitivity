@@ -104,6 +104,9 @@ enum SensitivityTestSuite {
             try await SensitivityTests.resolveInsideTheBoundary()
         }
 
+        Test("vault-display-entries", tags: ["vault", "display"]) {
+            try await SensitivityTests.displayEntries()
+        }
         Test("vault-lifetime-and-store", tags: ["vault"]) {
             try await SensitivityTests.vaultLifetimeAndStore()
         }
