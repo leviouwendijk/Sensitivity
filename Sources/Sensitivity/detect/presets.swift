@@ -1,3 +1,5 @@
+import Matching
+
 public extension Sensitivity {
     /// A named set of detectors for data that is sensitive anywhere,
     /// switched on by name (`presets: [.secrets, .contacts]`).
@@ -10,7 +12,7 @@ public extension Sensitivity {
             self.detectors = detectors
         }
 
-        public static let all: [Preset] = [.secrets, .contacts, .financial, .network, .links]
+        public static let all: [Preset] = [.secrets, .contacts, .financial, .payments, .network, .links]
 
         /// The preset called `name`, of `all`.
         public static func named(_ name: String) -> Preset? {
@@ -20,7 +22,9 @@ public extension Sensitivity {
 }
 
 public extension Sensitivity.Preset {
-    /// Keys, tokens, passwords and private keys.
+    /// Keys, tokens, passwords and private keys. Values are found by what
+    /// names them (an assignment, an env variable, a header), so hex tokens
+    /// are caught there while bare commit hashes are not.
     static let secrets = Self("secrets", detectors: [
         Sensitivity.Pattern(
             "secrets.pem",
@@ -32,10 +36,21 @@ public extension Sensitivity.Preset {
         Sensitivity.Pattern(
             "secrets.assignment",
             kind: .secret,
-            // The value only, so the name stays readable after replacing.
-            pattern: "(?<=(?:api[_-]?key|apikey|secret|token|password|passwd|client[_-]?secret|access[_-]?token|refresh[_-]?token|private[_-]?key)[\"']?\\s{0,3}[:=]\\s{0,3}[\"']?)[^\\s\"',;]{8,}",
-            score: 90,
-            reason: "value assigned to a key, token or password"
+            // Any name containing a credential word, as in api_key=, "access_token": or
+            // MAIL_PASSWORD_LEVI_HM=; the value only, so the name stays readable.
+            pattern: "(?<![A-Za-z0-9])[A-Za-z0-9_.-]*(?:api[_-]?key|apikey|secret|token|password|passwd|credential|private[_-]?key|auth[_-]?key)[A-Za-z0-9_.-]*[\"']?\\s{0,3}[:=]\\s{0,3}[\"']?(?<value>[^\\s\"',;]{6,})",
+            score: 92,
+            reason: "value assigned to a key, token or password",
+            group: .named("value")
+        ),
+        Sensitivity.Pattern(
+            "secrets.header",
+            kind: .secret,
+            // Authorization schemes and X-…-Authentication/Token/Key/Signature headers.
+            pattern: "(?:authorization:\\s*(?:bearer|basic|token|digest)\\s+|\\bx-[a-z0-9-]*(?:auth|authentication|token|key|signature|secret)[a-z0-9-]*:\\s*)(?<value>[^\\s\"']{8,})",
+            score: 94,
+            reason: "credential in an HTTP header",
+            group: .named("value")
         ),
         Sensitivity.Pattern(
             "secrets.aws-access-key",
@@ -52,7 +67,7 @@ public extension Sensitivity.Preset {
             score: 65,
             reason: "long random-looking token",
             caseSensitive: true,
-            // Mixed case and digits; plain hex (commit hashes, digests) is not a secret.
+            // Mixed case and digits; plain hex (commit hashes, digests) is not a secret on its own.
             assess: { token in
                 let upper = token.contains { $0.isUppercase }
                 let lower = token.contains { $0.isLowercase }
@@ -108,16 +123,62 @@ public extension Sensitivity.Preset {
                 (try? Sensitivity.IBAN(candidate)) != nil ? Sensitivity.Score(clamping: 97) : Sensitivity.Score(clamping: 45)
             }
         ),
+        Sensitivity.Pattern(
+            "financial.bic",
+            kind: .financial,
+            // Only where it is labelled: a bare BIC looks like any 8-letter word.
+            // The label in any case, the code itself upper case.
+            pattern: "\\b(?i:bic|swift)(?:[\\s_-]?(?i:code))?[\"']?\\s{0,3}[:=]?\\s{0,3}[\"']?(?<value>[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?)\\b",
+            score: 70,
+            reason: "BIC",
+            caseSensitive: true,
+            group: .named("value")
+        ),
     ])
 
-    /// Private IPv4 addresses and MAC addresses.
+    /// Payment provider credentials and identifiers (PAY.: AT codes, service
+    /// ids).
+    static let payments = Self("payments", detectors: [
+        Sensitivity.Pattern(
+            "payments.paynl-at-code",
+            kind: .secret,
+            pattern: "\\bAT-\\d{4}-\\d{4}\\b",
+            score: 88,
+            reason: "PAY. AT code (half of an API credential)",
+            caseSensitive: true
+        ),
+        Sensitivity.Pattern(
+            "payments.paynl-service-id",
+            kind: .identifier,
+            pattern: "\\bSL-\\d{4}-\\d{4}\\b",
+            score: 40,
+            reason: "PAY. service id",
+            caseSensitive: true
+        ),
+    ])
+
+    /// Private and link-local addresses, CIDR ranges and MAC addresses.
     static let network = Self("network", detectors: [
+        Sensitivity.Pattern(
+            "network.cidr",
+            kind: .network,
+            pattern: "\\b(?:\\d{1,3}\\.){3}\\d{1,3}/(?:3[0-2]|[12]?\\d)\\b",
+            score: 82,
+            reason: "IPv4 range"
+        ),
         Sensitivity.Pattern(
             "network.private-ipv4",
             kind: .network,
             pattern: "\\b(?:10\\.\\d{1,3}|192\\.168|172\\.(?:1[6-9]|2\\d|3[01]))\\.\\d{1,3}\\.\\d{1,3}\\b",
             score: 80,
             reason: "private IPv4 address"
+        ),
+        Sensitivity.Pattern(
+            "network.private-ipv6",
+            kind: .network,
+            pattern: "\\b(?:fd[0-9a-f]{2}|fe80):[0-9a-f:]*[0-9a-f](?:/\\d{1,3})?",
+            score: 75,
+            reason: "unique-local or link-local IPv6 address"
         ),
         Sensitivity.Pattern(
             "network.mac",

@@ -14,6 +14,8 @@ public extension Sensitivity {
         case network
         /// URLs that carry access (tokens, signatures).
         case link
+        /// Account, customer, merchant and service identifiers.
+        case identifier
         /// A person, animal or organization named in context.
         case identity
     }

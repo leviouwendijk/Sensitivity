@@ -18,6 +18,9 @@ public extension Sensitivity {
         public let score: Score
         public let reason: String
         public let caseSensitive: Bool
+        /// The part of the match that is sensitive: `.named("value")` for
+        /// `name = (?<value>…)`, so the name stays readable.
+        public let group: RegexGroup
         public let assess: (@Sendable (String) -> Score?)?
 
         public init(
@@ -27,6 +30,7 @@ public extension Sensitivity {
             score: Int,
             reason: String,
             caseSensitive: Bool = false,
+            group: RegexGroup = .whole,
             assess: (@Sendable (String) -> Score?)? = nil
         ) {
             self.name = name
@@ -35,12 +39,13 @@ public extension Sensitivity {
             self.score = Score(clamping: score)
             self.reason = reason
             self.caseSensitive = caseSensitive
+            self.group = group
             self.assess = assess
         }
 
         public func findings(in text: String) -> [Finding] {
             let options = TokenCaseOptions(sensitivity: caseSensitive ? .sensitive : .insensitive)
-            return RegexPattern.ranges(pattern, in: text, case: options).compactMap { range in
+            return RegexPattern.ranges(pattern, in: text, case: options, group: group).compactMap { range in
                 let matched = text.text(at: range)
                 let score: Score
                 if let assess {

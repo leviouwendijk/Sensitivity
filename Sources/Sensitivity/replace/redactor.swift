@@ -7,6 +7,9 @@ public extension Sensitivity {
         case verbose
         /// `[REDACTED]`.
         case redact
+        /// Keeps the last four letters or digits and the separators, so an
+        /// owner can tell values apart: `**** **** **** **43 00`.
+        case mask
         /// A consistent stand-in per value and kind: the same mail address
         /// is `Contact A` wherever it occurs, in every text this redactor
         /// handles.
@@ -68,6 +71,8 @@ public extension Sensitivity {
                 return "[\(kind.rawValue.uppercased())]"
             case .redact:
                 return "[REDACTED]"
+            case .mask:
+                return Sensitivity.mask(original)
             case .pseudonym:
                 let key = "\(kind.rawValue)\u{0}\(original.lowercased())"
                 if let existing = standIns[key] {

@@ -60,5 +60,29 @@ enum SensitivityTestSuite {
         Test("pseudonyms-consistent-across-texts", tags: ["replace"]) {
             try SensitivityTests.pseudonymsConsistentAcrossTexts()
         }
+
+        Test("named-secrets-value-only", tags: ["detect", "secrets"]) {
+            try SensitivityTests.namedSecretsValueOnly()
+        }
+
+        Test("payments-and-bic", tags: ["detect", "payments", "financial"]) {
+            try SensitivityTests.paymentsAndBIC()
+        }
+
+        Test("network-ranges-whole", tags: ["detect", "network"]) {
+            try SensitivityTests.networkRangesWhole()
+        }
+
+        Test("masking", tags: ["replace"]) {
+            try SensitivityTests.masking()
+        }
+
+        Test("redacted-values-never-show", tags: ["values"]) {
+            try SensitivityTests.redactedValuesNeverShow()
+        }
+
+        Test("safe-labels-allowlist", tags: ["projection"]) {
+            try SensitivityTests.safeLabelsAllowlist()
+        }
     }
 }
