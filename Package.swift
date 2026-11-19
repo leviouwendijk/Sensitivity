@@ -49,6 +49,7 @@ let package = Package(
             name: "SensitivityTests",
             dependencies: [
                 "Sensitivity",
+                .product(name: "Primitives", package: "Primitives"),
                 .product(name: "Testing", package: "Testing"),
             ],
             path: "Testing/SensitivityTests"

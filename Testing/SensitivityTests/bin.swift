@@ -88,5 +88,32 @@ enum SensitivityTestSuite {
         Test("safe-labels-allowlist", tags: ["projection"]) {
             try SensitivityTests.safeLabelsAllowlist()
         }
+        Test("shield-protects-with-handles", tags: ["shield"]) {
+            try await SensitivityTests.shieldProtectsWithHandles()
+        }
+
+        Test("known-values-catch-echoes", tags: ["shield"]) {
+            try await SensitivityTests.knownValuesCatchEchoes()
+        }
+
+        Test("never-list-and-json-paths", tags: ["shield"]) {
+            try await SensitivityTests.neverListAndJSONPaths()
+        }
+
+        Test("resolve-inside-the-boundary", tags: ["shield"]) {
+            try await SensitivityTests.resolveInsideTheBoundary()
+        }
+
+        Test("vault-lifetime-and-store", tags: ["vault"]) {
+            try await SensitivityTests.vaultLifetimeAndStore()
+        }
+
+        Test("preview-shows-masked-values", tags: ["preview"]) {
+            try await SensitivityTests.previewShowsMaskedValues()
+        }
+
+        Test("keychain-round-trip", tags: ["vault"]) {
+            try SensitivityTests.keychainRoundTrip()
+        }
     }
 }
