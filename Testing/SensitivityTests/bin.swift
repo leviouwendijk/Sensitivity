@@ -108,6 +108,10 @@ enum SensitivityTestSuite {
             try await SensitivityTests.vaultLifetimeAndStore()
         }
 
+        Test("unreferenced-and-released", tags: ["vault"]) {
+            try await SensitivityTests.unreferencedAndReleased()
+        }
+
         Test("preview-shows-masked-values", tags: ["preview"]) {
             try await SensitivityTests.previewShowsMaskedValues()
         }

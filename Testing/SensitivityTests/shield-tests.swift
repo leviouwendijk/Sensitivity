@@ -107,6 +107,27 @@ extension SensitivityTests {
         try Expect.false(dumped.contains("hunter2"), "a sensitive value never dumps")
     }
 
+    static func unreferencedAndReleased() async throws {
+        let store = MemoryStore()
+        let vault = Sensitivity.Vault(lifetime: nil, store: store)
+        let kept = await vault.handle(for: "sam@example.com", kind: .contact, tier: .handle, detector: "t", reason: "t", score: 90, source: "a", session: "s1")
+        let shared = await vault.handle(for: "06 00 00 00 00", kind: .contact, tier: .handle, detector: "t", reason: "t", score: 90, source: "a", session: "s1")
+        _ = await vault.handle(for: "06 00 00 00 00", kind: .contact, tier: .handle, detector: "t", reason: "t", score: 90, source: "b", session: "s2")
+        let unused = await vault.handle(for: "NL91ABNA0417164300", kind: .financial, tier: .handle, detector: "t", reason: "t", score: 97, source: "a", session: "s1")
+
+        let later = Date().addingTimeInterval(2 * 60 * 60)
+        let dropped = await vault.retain(referenced: [kept.id, shared.id], now: later)
+        try Expect.equal(dropped, 1, "the value no record holds is dropped")
+        try Expect.isNil(await vault.value(of: unused), "gone")
+        try Expect.equal(await vault.retain(referenced: [], now: Date()), 0, "young entries wait out the grace period")
+
+        try Expect.equal(await vault.release(session: "s1"), 1, "releasing s1 drops what only s1 saw")
+        try Expect.notNil(await vault.value(of: shared), "a value s2 also saw stays")
+        try Expect.equal(await vault.release(session: "s2"), 1, "and goes with s2")
+        try Expect.equal(await vault.count, 0, "empty")
+        try Expect.equal(store.count, 0, "an empty vault leaves nothing in its store")
+    }
+
     static func previewShowsMaskedValues() async throws {
         let shield = Sensitivity.Shield(vault: Sensitivity.Vault())
         let (protected, protection) = await shield.protect("pay NL91ABNA0417164300 from 1234 AB", source: "bunq_payments")

@@ -90,10 +90,13 @@ public extension Sensitivity {
     struct Shield: Sendable {
         public let vault: Vault
         public let policy: ShieldPolicy
+        /// The session whose payloads pass, recorded on each entry.
+        public let session: String?
 
-        public init(vault: Vault, policy: ShieldPolicy = .standard) {
+        public init(vault: Vault, policy: ShieldPolicy = .standard, session: String? = nil) {
             self.vault = vault
             self.policy = policy
+            self.session = session
         }
 
         /// `text` with handles for what the presets and the vault's known
@@ -120,7 +123,8 @@ public extension Sensitivity {
                         detector: finding.detector,
                         reason: finding.reason,
                         score: finding.score.raw,
-                        source: path.isEmpty ? source : "\(source) \(path)"
+                        source: path.isEmpty ? source : "\(source) \(path)",
+                        session: session
                     )
                 }
                 standIns.append(handle?.token)
